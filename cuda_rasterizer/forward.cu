@@ -40,23 +40,62 @@ __device__ glm::vec3 computeColorFromSH(int idx, int deg, int max_coeffs, const 
 		{
 			float xx = x * x, yy = y * y, zz = z * z;
 			float xy = x * y, yz = y * z, xz = x * z;
+			float xxpyy = xx + yy; xxmyy = xx - yy;
 			result = result +
 				SH_C2[0] * xy * sh[4] +
 				SH_C2[1] * yz * sh[5] +
-				SH_C2[2] * (2.0f * zz - xx - yy) * sh[6] +
+				SH_C2[2] * (2.0f * zz - xxpyy) * sh[6] +
 				SH_C2[3] * xz * sh[7] +
-				SH_C2[4] * (xx - yy) * sh[8];
+				SH_C2[4] * xxmyy * sh[8];
 
 			if (deg > 2)
 			{
 				result = result +
 					SH_C3[0] * y * (3.0f * xx - yy) * sh[9] +
 					SH_C3[1] * xy * z * sh[10] +
-					SH_C3[2] * y * (4.0f * zz - xx - yy) * sh[11] +
-					SH_C3[3] * z * (2.0f * zz - 3.0f * xx - 3.0f * yy) * sh[12] +
-					SH_C3[4] * x * (4.0f * zz - xx - yy) * sh[13] +
-					SH_C3[5] * z * (xx - yy) * sh[14] +
+					SH_C3[2] * y * (4.0f * zz - xxpyy) * sh[11] +
+					SH_C3[3] * z * (2.0f * zz - 3.0f * xxpyy) * sh[12] +
+					SH_C3[4] * x * (4.0f * zz - xxpyy) * sh[13] +
+					SH_C3[5] * z * xxmyy * sh[14] +
 					SH_C3[6] * x * (xx - 3.0f * yy) * sh[15];
+				
+				if (deg > 3)
+				{
+					result = result +
+						// See backward.cu for a few more commments, not many
+						SH_C4[0] * xy * xxmyy * sh[16] + 
+						SH_C4[1] * yz * (3.0f * xx - yy) * sh[17] + 
+						SH_C4[2] * xy * (6.0f * zz - xxpyy) * sh[18] + 
+						SH_C4[3] * yz * (4.0f * zz - 3.0f * xxpyy) * sh[19] +
+						SH_C4[4] * (8 * zz * (zz - 3.0f * xxpyy) + 3 * xxpyy * xxpyy) * sh[20] +
+						SH_C4[5] * xz * (4.0f * zz - 3.0f * xxpyy) * sh[21] + 
+						SH_C4[6] * (xx * (6.0f * zz - xx) + yy * (yy - 6.0f * zz)) * sh[22] +
+						SH_C4[7] * xz * (xx - 3.0f * yy) * sh[23] +
+						SH_C4[8] * (xxmyy - 2.0f * xy) * (xxmyy + 2.0f * xy) * sh[24];
+					
+					if (deg > 4)
+					{
+						result = result +
+							SH_C5[0]  * y * (5.f * xx * (xx - 2.f * yy) + yy * yy) * sh[25] +
+							SH_C5[1]  * xy * z * xxmyy * sh[26] +
+							SH_C5[2]  * y * (3.f * xx - yy) * (8.f * zz - xxpyy) * sh[27] +
+							SH_C5[3]  * xy * z * (2.f * zz - xxpyy) * sh[28] +
+							SH_C5[4]  * y * (xxpyy * xxpyy + zz * (8.f * zz - 12.f * xxpyy)) * sh[29] +
+							SH_C5[5]  * z * (15.f * xxpyy * xxpyy + 8.f * zz * (zz - 5.f * xxpyy)) * sh[30] +
+							SH_C5[6]  * x * (xxpyy * xxpyy + 4.f * zz * (2.f * zz - 3.f * xxpyy)) * sh[31] +
+							SH_C5[7]  * z * (xx * (2.f * zz - xx) + yy * (yy - 2.f * zz)) * sh[32] +
+							SH_C5[8]  * x * (xx - 3.f * yy) * (8.f * zz - xxpyy) * sh[33] +
+							SH_C5[9]  * z * (xxmyy - 2.f * xy) * (xxmyy + 2.f * xy) * sh[34] +
+							SH_C5[10] * x * (5.f * yy * (yy - 2.f * xx) + xx * xx) * sh[35];
+
+						if (deg > 5)
+						{
+
+
+
+						}
+					}
+				}
 			}
 		}
 	}
