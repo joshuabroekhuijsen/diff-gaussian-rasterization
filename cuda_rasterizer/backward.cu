@@ -254,7 +254,7 @@ __device__ void computeColorFromSH(int idx, int deg, int max_coeffs, const glm::
 							SH_C5[6] * sh[31] * 8.f * xz * (4.f * zz - 3.f * xxpyy) +
 							SH_C5[7] * sh[32] * (xx * (6.f * zz - xx) + yy * (yy - 6.f * zz)) + 
 							SH_C5[8] * sh[33] * 16.f * xz * (xx - 3.f * yy) +
-							SH_C5[9] * sh[34] * (xxmyy - 2.f * xy) * (xxmyy + 2.f * xy) +
+							SH_C5[9] * sh[34] * (xxmyy - 2.f * xy) * (xxmyy + 2.f * xy)
 							// No SH_C5[10]/sh[35] term
 						);
 
