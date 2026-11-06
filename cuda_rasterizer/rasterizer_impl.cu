@@ -225,7 +225,7 @@ int CudaRasterizer::Rasterizer::forward(
 	int* radii,
 	int* rects,
 	float* boxmin,
-	float* boxmax)
+	float* boxmax,
 	bool debug)
 {
 	const float focal_y = height / (2.0f * tan_fovy);

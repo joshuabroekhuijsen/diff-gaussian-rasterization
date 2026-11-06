@@ -54,7 +54,7 @@ namespace CudaRasterizer
 			int* radii = nullptr,
 			int* rects = nullptr,
 			float* boxmin = nullptr,
-			float* boxmax = nullptr);
+			float* boxmax = nullptr,
 			bool debug = false);
 
 		static void backward(
