@@ -63,9 +63,9 @@ __device__ const float SH_C5[] = {
 	 2.0756623148810412789957985225951992690f,
 	-0.6563820568401701028141187663761445594f
 };
-__device__ const float SH_C6[] = {
+// __device__ const float SH_C6[] = {
 
-};
+// };
 
 __forceinline__ __device__ float ndc2Pix(float v, int S)
 {

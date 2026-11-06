@@ -66,7 +66,7 @@ __device__ void computeColorFromSH(int idx, int deg, int max_coeffs, const glm::
 		{
 			float xx = x * x, yy = y * y, zz = z * z;
 			float xy = x * y, yz = y * z, xz = x * z;
-			float xxpyy = xx + yy; xxmyy = xx - yy;
+			float xxpyy = xx + yy, xxmyy = xx - yy;
 
 			float dRGBdsh4 = SH_C2[0] * xy;
 			float dRGBdsh5 = SH_C2[1] * yz;
