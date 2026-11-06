@@ -40,23 +40,62 @@ __device__ glm::vec3 computeColorFromSH(int idx, int deg, int max_coeffs, const 
 		{
 			float xx = x * x, yy = y * y, zz = z * z;
 			float xy = x * y, yz = y * z, xz = x * z;
+			float xxpyy = xx + yy; xxmyy = xx - yy;
 			result = result +
 				SH_C2[0] * xy * sh[4] +
 				SH_C2[1] * yz * sh[5] +
-				SH_C2[2] * (2.0f * zz - xx - yy) * sh[6] +
+				SH_C2[2] * (2.0f * zz - xxpyy) * sh[6] +
 				SH_C2[3] * xz * sh[7] +
-				SH_C2[4] * (xx - yy) * sh[8];
+				SH_C2[4] * xxmyy * sh[8];
 
 			if (deg > 2)
 			{
 				result = result +
 					SH_C3[0] * y * (3.0f * xx - yy) * sh[9] +
 					SH_C3[1] * xy * z * sh[10] +
-					SH_C3[2] * y * (4.0f * zz - xx - yy) * sh[11] +
-					SH_C3[3] * z * (2.0f * zz - 3.0f * xx - 3.0f * yy) * sh[12] +
-					SH_C3[4] * x * (4.0f * zz - xx - yy) * sh[13] +
-					SH_C3[5] * z * (xx - yy) * sh[14] +
+					SH_C3[2] * y * (4.0f * zz - xxpyy) * sh[11] +
+					SH_C3[3] * z * (2.0f * zz - 3.0f * xxpyy) * sh[12] +
+					SH_C3[4] * x * (4.0f * zz - xxpyy) * sh[13] +
+					SH_C3[5] * z * xxmyy * sh[14] +
 					SH_C3[6] * x * (xx - 3.0f * yy) * sh[15];
+				
+				if (deg > 3)
+				{
+					result = result +
+						// See backward.cu for a few more commments, not many
+						SH_C4[0] * xy * xxmyy * sh[16] + 
+						SH_C4[1] * yz * (3.0f * xx - yy) * sh[17] + 
+						SH_C4[2] * xy * (6.0f * zz - xxpyy) * sh[18] + 
+						SH_C4[3] * yz * (4.0f * zz - 3.0f * xxpyy) * sh[19] +
+						SH_C4[4] * (8 * zz * (zz - 3.0f * xxpyy) + 3 * xxpyy * xxpyy) * sh[20] +
+						SH_C4[5] * xz * (4.0f * zz - 3.0f * xxpyy) * sh[21] + 
+						SH_C4[6] * (xx * (6.0f * zz - xx) + yy * (yy - 6.0f * zz)) * sh[22] +
+						SH_C4[7] * xz * (xx - 3.0f * yy) * sh[23] +
+						SH_C4[8] * (xxmyy - 2.0f * xy) * (xxmyy + 2.0f * xy) * sh[24];
+					
+					if (deg > 4)
+					{
+						result = result +
+							SH_C5[0]  * y * (5.f * xx * (xx - 2.f * yy) + yy * yy) * sh[25] +
+							SH_C5[1]  * xy * z * xxmyy * sh[26] +
+							SH_C5[2]  * y * (3.f * xx - yy) * (8.f * zz - xxpyy) * sh[27] +
+							SH_C5[3]  * xy * z * (2.f * zz - xxpyy) * sh[28] +
+							SH_C5[4]  * y * (xxpyy * xxpyy + zz * (8.f * zz - 12.f * xxpyy)) * sh[29] +
+							SH_C5[5]  * z * (15.f * xxpyy * xxpyy + 8.f * zz * (zz - 5.f * xxpyy)) * sh[30] +
+							SH_C5[6]  * x * (xxpyy * xxpyy + 4.f * zz * (2.f * zz - 3.f * xxpyy)) * sh[31] +
+							SH_C5[7]  * z * (xx * (2.f * zz - xx) + yy * (yy - 2.f * zz)) * sh[32] +
+							SH_C5[8]  * x * (xx - 3.f * yy) * (8.f * zz - xxpyy) * sh[33] +
+							SH_C5[9]  * z * (xxmyy - 2.f * xy) * (xxmyy + 2.f * xy) * sh[34] +
+							SH_C5[10] * x * (5.f * yy * (yy - 2.f * xx) + xx * xx) * sh[35];
+
+						if (deg > 5)
+						{
+
+
+
+						}
+					}
+				}
 			}
 		}
 	}
@@ -105,10 +144,6 @@ __device__ float3 computeCov2D(const float3& mean, float focal_x, float focal_y,
 
 	glm::mat3 cov = glm::transpose(T) * glm::transpose(Vrk) * T;
 
-	// Apply low-pass filter: every Gaussian should be at least
-	// one pixel wide/high. Discard 3rd row and column.
-	cov[0][0] += 0.3f;
-	cov[1][1] += 0.3f;
 	return { float(cov[0][0]), float(cov[0][1]), float(cov[1][1]) };
 }
 
@@ -177,7 +212,11 @@ __global__ void preprocessCUDA(int P, int D, int M,
 	float4* conic_opacity,
 	const dim3 grid,
 	uint32_t* tiles_touched,
-	bool prefiltered)
+	bool prefiltered,
+	int2* rects,
+	float3 boxmin,
+	float3 boxmax,
+	bool antialiasing)
 {
 	auto idx = cg::this_grid().thread_rank();
 	if (idx >= P)
@@ -195,6 +234,11 @@ __global__ void preprocessCUDA(int P, int D, int M,
 
 	// Transform point by projecting
 	float3 p_orig = { orig_points[3 * idx], orig_points[3 * idx + 1], orig_points[3 * idx + 2] };
+
+	if (p_orig.x < boxmin.x || p_orig.y < boxmin.y || p_orig.z < boxmin.z ||
+		p_orig.x > boxmax.x || p_orig.y > boxmax.y || p_orig.z > boxmax.z)
+		return;
+
 	float4 p_hom = transformPoint4x4(p_orig, projmatrix);
 	float p_w = 1.0f / (p_hom.w + 0.0000001f);
 	float3 p_proj = { p_hom.x * p_w, p_hom.y * p_w, p_hom.z * p_w };
@@ -215,8 +259,19 @@ __global__ void preprocessCUDA(int P, int D, int M,
 	// Compute 2D screen-space covariance matrix
 	float3 cov = computeCov2D(p_orig, focal_x, focal_y, tan_fovx, tan_fovy, cov3D, viewmatrix);
 
+	constexpr float h_var = 0.3f;
+	const float det_cov = cov.x * cov.z - cov.y * cov.y;
+	cov.x += h_var;
+	cov.z += h_var;
+	const float det_cov_plus_h_cov = cov.x * cov.z - cov.y * cov.y;
+	float h_convolution_scaling = 1.0f;
+
+	if(antialiasing)
+		h_convolution_scaling = sqrt(max(0.000025f, det_cov / det_cov_plus_h_cov)); // max for numerical stability
+
 	// Invert covariance (EWA algorithm)
-	float det = (cov.x * cov.z - cov.y * cov.y);
+	const float det = det_cov_plus_h_cov;
+
 	if (det == 0.0f)
 		return;
 	float det_inv = 1.f / det;
@@ -226,13 +281,25 @@ __global__ void preprocessCUDA(int P, int D, int M,
 	// 2D covariance matrix). Use extent to compute a bounding rectangle
 	// of screen-space tiles that this Gaussian overlaps with. Quit if
 	// rectangle covers 0 tiles. 
+
 	float mid = 0.5f * (cov.x + cov.z);
 	float lambda1 = mid + sqrt(max(0.1f, mid * mid - det));
 	float lambda2 = mid - sqrt(max(0.1f, mid * mid - det));
 	float my_radius = ceil(3.f * sqrt(max(lambda1, lambda2)));
 	float2 point_image = { ndc2Pix(p_proj.x, W), ndc2Pix(p_proj.y, H) };
 	uint2 rect_min, rect_max;
-	getRect(point_image, my_radius, rect_min, rect_max, grid);
+
+	if (rects == nullptr) 	// More conservative
+	{
+		getRect(point_image, my_radius, rect_min, rect_max, grid);
+	}
+	else // Slightly more aggressive, might need a math cleanup
+	{
+		const int2 my_rect = { (int)ceil(3.f * sqrt(cov.x)), (int)ceil(3.f * sqrt(cov.z)) };
+		rects[idx] = my_rect;
+		getRect(point_image, my_rect, rect_min, rect_max, grid);
+	}
+
 	if ((rect_max.x - rect_min.x) * (rect_max.y - rect_min.y) == 0)
 		return;
 
@@ -251,7 +318,12 @@ __global__ void preprocessCUDA(int P, int D, int M,
 	radii[idx] = my_radius;
 	points_xy_image[idx] = point_image;
 	// Inverse 2D covariance and opacity neatly pack into one float4
-	conic_opacity[idx] = { conic.x, conic.y, conic.z, opacities[idx] };
+	float opacity = opacities[idx];
+
+
+	conic_opacity[idx] = { conic.x, conic.y, conic.z, opacity * h_convolution_scaling };
+
+
 	tiles_touched[idx] = (rect_max.y - rect_min.y) * (rect_max.x - rect_min.x);
 }
 
@@ -270,7 +342,9 @@ renderCUDA(
 	float* __restrict__ final_T,
 	uint32_t* __restrict__ n_contrib,
 	const float* __restrict__ bg_color,
-	float* __restrict__ out_color)
+	float* __restrict__ out_color,
+	const float* __restrict__ depths,
+	float* __restrict__ invdepth)
 {
 	// Identify current tile and associated min/max pixel range.
 	auto block = cg::this_thread_block();
@@ -301,6 +375,8 @@ renderCUDA(
 	uint32_t contributor = 0;
 	uint32_t last_contributor = 0;
 	float C[CHANNELS] = { 0 };
+
+	float expected_invdepth = 0.0f;
 
 	// Iterate over batches until all done or range is complete
 	for (int i = 0; i < rounds; i++, toDo -= BLOCK_SIZE)
@@ -354,6 +430,9 @@ renderCUDA(
 			for (int ch = 0; ch < CHANNELS; ch++)
 				C[ch] += features[collected_id[j] * CHANNELS + ch] * alpha * T;
 
+			if(invdepth)
+			expected_invdepth += (1 / depths[collected_id[j]]) * alpha * T;
+
 			T = test_T;
 
 			// Keep track of last range entry to update this
@@ -370,6 +449,9 @@ renderCUDA(
 		n_contrib[pix_id] = last_contributor;
 		for (int ch = 0; ch < CHANNELS; ch++)
 			out_color[ch * H * W + pix_id] = C[ch] + T * bg_color[ch];
+
+		if (invdepth)
+		invdepth[pix_id] = expected_invdepth;// 1. / (expected_depth + T * 1e3);
 	}
 }
 
@@ -384,7 +466,9 @@ void FORWARD::render(
 	float* final_T,
 	uint32_t* n_contrib,
 	const float* bg_color,
-	float* out_color)
+	float* out_color,
+	float* depths,
+	float* depth)
 {
 	renderCUDA<NUM_CHANNELS> << <grid, block >> > (
 		ranges,
@@ -396,7 +480,9 @@ void FORWARD::render(
 		final_T,
 		n_contrib,
 		bg_color,
-		out_color);
+		out_color,
+		depths, 
+		depth);
 }
 
 void FORWARD::preprocess(int P, int D, int M,
@@ -423,7 +509,11 @@ void FORWARD::preprocess(int P, int D, int M,
 	float4* conic_opacity,
 	const dim3 grid,
 	uint32_t* tiles_touched,
-	bool prefiltered)
+	bool prefiltered,
+	int2* rects,
+	float3 boxmin,
+	float3 boxmax,
+	bool antialiasing)
 {
 	preprocessCUDA<NUM_CHANNELS> << <(P + 255) / 256, 256 >> > (
 		P, D, M,
@@ -450,6 +540,10 @@ void FORWARD::preprocess(int P, int D, int M,
 		conic_opacity,
 		grid,
 		tiles_touched,
-		prefiltered
+		prefiltered,
+		rects,
+		boxmin,
+		boxmax,
+		antialiasing
 		);
 }
