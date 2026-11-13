@@ -111,13 +111,15 @@ RasterizeGaussiansCUDA(
 		viewmatrix.contiguous().data<float>(), 
 		projmatrix.contiguous().data<float>(),
 		campos.contiguous().data<float>(),
-		tan_fovx,
-		tan_fovy,
+		tan_fovx, tan_fovy,
 		prefiltered,
 		out_color.contiguous().data<float>(),
 		out_invdepthptr,
 		antialiasing,
 		radii.contiguous().data<int>(),
+		nullptr,
+		nullptr,
+		nullptr,
 		debug);
   }
   return std::make_tuple(rendered, out_color, radii, geomBuffer, binningBuffer, imgBuffer, out_invdepth);
